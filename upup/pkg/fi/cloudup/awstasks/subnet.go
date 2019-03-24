@@ -194,7 +194,31 @@ func (_ *Subnet) RenderAWS(t *awsup.AWSAPITarget, a, e, changes *Subnet) error {
 		e.ID = response.Subnet.SubnetId
 	}
 
-	return t.AddAWSTags(*e.ID, e.Tags)
+	if err := t.AddAWSTags(*e.ID, e.Tags); err != nil {
+		return fmt.Errorf("error adding AWS Tags to subnet: %v", err)
+	}
+
+	if a != nil && len(a.Tags) > 0 {
+		tagsToDelete := e.getSubnetVolumeTagsToDelete(a.Tags)
+		if len(tagsToDelete) > 0 {
+			return t.DeleteTags(*e.ID, tagsToDelete)
+		}
+	}
+
+	return nil
+}
+
+// getSubnetVolumeTagsToDelete loops through all subnet tags
+// and gets a list to be deleted from the private and public subnets
+func (e *Subnet) getSubnetVolumeTagsToDelete(currentTags map[string]string) map[string]string {
+	tagsToDelete := map[string]string{}
+	for k, v := range currentTags {
+		if _, ok := e.Tags[k]; !ok {
+			tagsToDelete[k] = v
+		}
+	}
+
+	return tagsToDelete
 }
 
 func subnetSlicesEqualIgnoreOrder(l, r []*Subnet) bool {
